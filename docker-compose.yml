@@ -1,0 +1,51 @@
+version: "3"
+
+services:
+  mc:
+    image: itzg/minecraft-server
+    ports:
+      - 25565:25565
+      - 8123:8123
+    environment:
+      - EULA=TRUE
+      - VERSION=1.20.2
+      - MAX_MEMORY=16G
+      - VIEW_DISTANCE=20
+      - SIMULATION_DISTANCE=20
+      - TYPE=PAPER
+      - MOTD="A §l§cMinecraft§r §nserver"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    volumes:
+      # attach a directory relative to the directory containing this compose file
+      - ${MC_DIRECTORY}:/data
+    # "init" container for mc to restore the data volume when empty
+  restore-backup:
+    # Same image as mc, but any base image with bash and tar will work
+    image: itzg/mc-backup
+    restart: no
+    entrypoint: restore-tar-backup
+    volumes:
+      # Must be same mount as mc service, needs to be writable
+      - ${MC_DIRECTORY}:/data
+      # Must be same mount as backups service, but can be read-only
+      - ${MC_BACKUP_DIRECTORY}:/backups:ro
+  backups:
+    image: itzg/mc-backup
+    depends_on:
+      mc:
+        condition: service_healthy
+    environment:
+      BACKUP_INTERVAL: "4h"
+      RCON_HOST: mc
+      PRE_BACKUP_SCRIPT: |
+        echo "Backup of server may lag a litle!"
+      POST_BACKUP_SCRIPT: |
+        echo "Backup of server is done!"
+      EXCLUDES: "plugins,*.jar,cache,logs,*.tmp"
+      # since this service waits for mc to be healthy, no initial delay is needed
+      INITIAL_DELAY: 0
+    volumes:
+      - ${MC_DIRECTORY}:/data:ro
+      - ${MC_BACKUP_DIRECTORY}:/backups
